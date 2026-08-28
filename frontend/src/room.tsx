@@ -2,6 +2,10 @@ import axios from "axios";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Editor } from "@monaco-editor/react";
+
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+const WS_URL = import.meta.env.VITE_WS_URL || "ws://localhost:3000";
+
 function Room() {
   const { id } = useParams<{ id: string }>();
   const [text, setText] = useState("");
@@ -13,12 +17,12 @@ function Room() {
     if (!id) return;
 
     axios
-      .get(`http://localhost:3000/text/${id}`)
+      .get(`${API_URL}/text/${id}`)
       .then((response) => setText(response.data.text ?? ""))
       .catch((error) => console.error("Error loading room:", error));
 
     const socket = new WebSocket(
-      `ws://localhost:8081?roomId=${encodeURIComponent(id)}`,
+      `${WS_URL}?roomId=${encodeURIComponent(id)}`,
     );
     socketRef.current = socket;
     socket.onmessage = (event) => {
@@ -43,7 +47,7 @@ function Room() {
     setSaveState('saving');
     saveTimerRef.current = setTimeout(() => {
       axios
-        .put(`http://localhost:3000/text/${id}`, { text: newText })
+        .put(`${API_URL}/text/${id}`, { text: newText })
         .then(() => setSaveState('synced'))
         .catch((error) => {
           setSaveState('error');

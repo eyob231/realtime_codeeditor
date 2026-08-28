@@ -2,17 +2,21 @@ import express from 'express';
 import { pool } from './db/db.js';
 import cors from 'cors';
 import { WebSocket, WebSocketServer } from 'ws';
+import { createServer } from 'node:http';
 
+
+const PORT = process.env.PORT || 3000;
 const root = express();
 root.use(express.json());
-const wss = new WebSocketServer({ port: 8081 });
+const server = createServer(root);
+const wss = new WebSocketServer({ server });
 root.use(cors());
 
-const broadcastTextUpdate = (payload) => {
+const broadcastTextUpdate = (payload, roomId) => {
   const message = JSON.stringify({ type: 'text-update', ...payload });
 
   wss.clients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN) {
+    if (client.readyState === WebSocket.OPEN && (!roomId || client.roomId === roomId)) {
       client.send(message);
     }
   });
@@ -41,7 +45,7 @@ root.post('/text', async (req, res) => {
 
     const saved = result.rows[0];
     res.status(200).json({ id: saved.id, text: saved.text });
-    broadcastTextUpdate({ id: saved.id, text: saved.text });
+    broadcastTextUpdate({ id: saved.id, text: saved.text }, saved.id);
   } catch (err) {
     console.error('Error saving text:', err.message);
     res.status(500).json({ error: 'Internal server error' });
@@ -89,7 +93,7 @@ root.put('/text/:id' , async (req,res) => {
     broadcastTextUpdate({
       id: updated.id,
       text: updated.text
-    });
+    }, updated.id);
 
     res.status(200).json(updated);
   } catch (error) {
@@ -101,10 +105,18 @@ root.put('/text/:id' , async (req,res) => {
 
 wss.on('connection', async (socket, request) => {
   const roomId = new URL(request.url, 'ws://localhost').searchParams.get('roomId');
-  const latest = await pool.query(
-    'SELECT text FROM "text" WHERE id = $1 LIMIT 1',
-    [roomId]
-  );
+  let latest;
+
+  try {
+    latest = await pool.query(
+      'SELECT text FROM "text" WHERE id = $1 LIMIT 1',
+      [roomId]
+    );
+  } catch (error) {
+    console.error('Error loading room:', error.message);
+    socket.close(1011, 'Unable to load room');
+    return;
+  }
 
   if (latest.rows[0]) {
     socket.send(JSON.stringify({
@@ -112,19 +124,11 @@ wss.on('connection', async (socket, request) => {
       text: latest.rows[0].text
     }));
   }
+  socket.roomId = roomId;
   socket.on('message', (raw) => {
     const message = JSON.parse(raw.toString());
-
-    wss.clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN && client.roomId === roomId) {
-        client.send(JSON.stringify({
-          type: 'text-update',
-          text: message.text
-        }));
-      }
-    });
+    broadcastTextUpdate({ text: message.text }, roomId);
   });
-  socket.roomId = roomId;
 });
 
 root.post('/register', async (req,res) =>{
@@ -152,8 +156,8 @@ root.get('/txt',async (req,res) => {
 
 
 
-root.listen(3000, async () => {
-  console.log('Server is running on port 3000');
+server.listen(PORT, async () => {
+  console.log(`Server is running on port ${PORT}`);
 
   try {
     await pool.query('SELECT 1');
