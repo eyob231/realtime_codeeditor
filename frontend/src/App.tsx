@@ -1,70 +1,71 @@
-
-import './App.css'
-import axios from 'axios'
-import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import './App.css';
+import { useState, type FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 function App() {
-  const [isdataLoaded, setloded] = useState(false)
-  const [formData, setFormData] = useState({
-    username: '',
-    email: '',
-    password: ''
-  });
-  const fetchData = async () => {
-    try {
-      const response = await axios.post('http://localhost:3000/register', {
-        username : formData.username,
-        email: formData.email ,
-        password : formData.password
-      });
-      console.log(response.data);
-      return response.data;
-    }catch (error) {
-      console.error('Error fetching data:', error);
-    }
-  }
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['register'],
-   queryFn: fetchData,
-   enabled: isdataLoaded,
-   staleTime: 1000 * 5
-  });
-  if (isLoading) return <p>Loading...</p>;
-  if (error) return <p>Error: {error.message}</p>;
-  return (
-    <main>
-      <h1>Welcome to React</h1>
-      <form onSubmit={(e) => {
-       setloded(true)
-      }}>
-        <label>
-          Username:
-          <input type="text" value={formData.username} onChange={(e) => setFormData({ ...formData, username: e.target.value })} />
-        </label>
-        <br />
-        <label>
-          Email:
-          <input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
-        </label>
-        <br />
-        <label>
-          Password:
-          <input type="password" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} />
-        </label>
-        <br />
-        <button type="submit" >Register</button>
-      </form>
-      {data && (
-        <div>
-          <h2>User Data:</h2>
-          <pre>{JSON.stringify(data, null, 2)}</pre>
-        </div>
-      )}
+  const navigate = useNavigate();
+  const [roomId, setRoomId] = useState('');
 
+  const createRoom = () => {
+    navigate(`/room/${crypto.randomUUID()}`);
+  };
+
+  const joinRoom = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmedRoomId = roomId.trim();
+
+    if (trimmedRoomId) {
+      navigate(`/room/${encodeURIComponent(trimmedRoomId)}`);
+    }
+  };
+
+  return (
+    <main className="landing-shell">
+      <header className="app-bar">
+        <div className="brand-mark"><span>&lt;/&gt;</span> syncpad</div>
+        <div className="connection-pill"><span className="status-dot" /> service online</div>
+      </header>
+
+      <section className="landing-content">
+        <div className="intro-block">
+          <p className="eyebrow">REALTIME WORKSPACE</p>
+          <h1>Write together,<br /><em>in the same room.</em></h1>
+          <p className="intro-copy">A shared code canvas for quick ideas, pair sessions, and everything worth keeping in sync.</p>
+        </div>
+
+        <div className="room-panel">
+          <div className="panel-heading">
+            <span className="panel-index">01</span>
+            <div>
+              <h2>Open a workspace</h2>
+              <p>Join an existing room or start a fresh one.</p>
+            </div>
+          </div>
+          <form onSubmit={joinRoom} className="join-form">
+            <label htmlFor="room-id">ROOM ID</label>
+            <div className="input-row">
+              <input
+                id="room-id"
+                value={roomId}
+                onChange={(event) => setRoomId(event.target.value)}
+                placeholder="paste room id"
+                autoComplete="off"
+              />
+              <button type="submit">Join <span>↗</span></button>
+            </div>
+          </form>
+          <div className="divider"><span>or</span></div>
+          <button className="create-button" onClick={createRoom}><span className="plus-icon">+</span> Create a new room <span className="button-arrow">→</span></button>
+        </div>
+      </section>
+
+      <footer className="landing-footer">
+        <span><b>⌘</b> one link, everyone in</span>
+        <span><b>◌</b> changes sync instantly</span>
+        <span><b>⌁</b> saved automatically</span>
+      </footer>
     </main>
-   
-  )
+  );
 }
 
-export default App
+export default App;
