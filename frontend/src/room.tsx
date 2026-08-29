@@ -3,7 +3,6 @@ import type { AxiosInstance } from "axios";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Editor } from "@monaco-editor/react";
-import type { IStandaloneCodeEditor } from "monaco-editor";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 const WS_URL = import.meta.env.VITE_WS_URL || "ws://localhost:3000";
@@ -25,7 +24,7 @@ function Room() {
   const socketRef = useRef<WebSocket | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [saveState, setSaveState] = useState('synced');
-  const editorRef = useRef<IStandaloneCodeEditor | null>(null);
+  const editorRef = useRef<any>(null);
   const textRef = useRef("");
   const isTypingRef = useRef(false);
 
@@ -74,7 +73,7 @@ function Room() {
     };
   }, [id]);
 
-  const handleEditorMount = (editor: IStandaloneCodeEditor) => {
+  const handleEditorMount = (editor: any) => {
     editorRef.current = editor;
   };
 
