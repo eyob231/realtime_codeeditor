@@ -25,9 +25,9 @@ function Room() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingTextRef = useRef<string>("");
+  const lastSentRef = useRef<string>("");
   const [saveState, setSaveState] = useState('synced');
   const editorRef = useRef<any>(null);
-  const textRef = useRef("");
   const isTypingRef = useRef(false);
 
   useEffect(() => {
@@ -38,7 +38,8 @@ function Room() {
       .then((response) => {
         const initialText = response.data.text ?? "";
         setText(initialText);
-        textRef.current = initialText;
+        pendingTextRef.current = initialText;
+        lastSentRef.current = initialText;
       })
       .catch((error) => console.error("Error loading room:", error));
 
@@ -48,24 +49,11 @@ function Room() {
     socketRef.current = socket;
     socket.onmessage = (event) => {
       const message = JSON.parse(event.data);
-      if (message.type === "text-update" && !message.fromSelf) {
-        // Only update text from other users, preserve cursor position
-        textRef.current = message.text;
-        
-        // Use Monaco API to preserve cursor position if editor is loaded
-        if (editorRef.current) {
-          const editor = editorRef.current;
-          const currentPosition = editor.getPosition();
-          editor.getModel()?.setValue(message.text);
-          
-          // Restore cursor position if valid
-          if (currentPosition) {
-            editor.setPosition(currentPosition);
-          }
-        } else {
-          // Fallback if editor not loaded yet
-          setText(message.text);
-        }
+      if (message.type === "text-update" && !isTypingRef.current) {
+        // Update React state only when NOT typing locally
+        setText(message.text);
+        pendingTextRef.current = message.text;
+        lastSentRef.current = message.text;
       }
     };
 
@@ -82,18 +70,24 @@ function Room() {
 
   const handleTextChange = (newText: string | undefined) => {
     const updatedText = newText ?? "";
+    
+    // Keep React state synchronized immediately for controlled component
     setText(updatedText);
-    textRef.current = updatedText;
+    pendingTextRef.current = updatedText;
     isTypingRef.current = true;
     
     // Debounce WebSocket broadcast (300ms) to batch updates
     if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
-    pendingTextRef.current = updatedText;
     syncTimerRef.current = setTimeout(() => {
-      if (socketRef.current?.readyState === WebSocket.OPEN) {
-        socketRef.current.send(
-          JSON.stringify({ type: "text-update", text: pendingTextRef.current, fromSelf: true }),
-        );
+      // Only send if text has actually changed since last send
+      if (pendingTextRef.current !== lastSentRef.current) {
+        console.log('Sending WebSocket update:', pendingTextRef.current.length, 'chars');
+        lastSentRef.current = pendingTextRef.current;
+        if (socketRef.current?.readyState === WebSocket.OPEN) {
+          socketRef.current.send(
+            JSON.stringify({ type: "text-update", text: pendingTextRef.current }),
+          );
+        }
       }
     }, 300);
     
@@ -101,6 +95,7 @@ function Room() {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     setSaveState('saving');
     saveTimerRef.current = setTimeout(() => {
+      console.log('Saving to backend:', updatedText.length, 'chars');
       isTypingRef.current = false;
       axiosInstance
         .put(`/text/${id}`, { text: updatedText })
