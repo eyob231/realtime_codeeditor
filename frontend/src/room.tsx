@@ -1,7 +1,9 @@
-import axios, { AxiosInstance } from "axios";
+import axios from "axios";
+import type { AxiosInstance } from "axios";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Editor, type IStandaloneCodeEditor } from "@monaco-editor/react";
+import { Editor } from "@monaco-editor/react";
+import type { IStandaloneCodeEditor } from "monaco-editor";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 const WS_URL = import.meta.env.VITE_WS_URL || "ws://localhost:3000";
