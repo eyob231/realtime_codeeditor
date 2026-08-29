@@ -12,11 +12,13 @@ const server = createServer(root);
 const wss = new WebSocketServer({ server });
 root.use(cors());
 
-const broadcastTextUpdate = (payload, roomId) => {
+const broadcastTextUpdate = (payload, roomId, excludeClientId = null) => {
   const message = JSON.stringify({ type: 'text-update', ...payload });
 
   wss.clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN && (!roomId || client.roomId === roomId)) {
+      // Skip broadcasting back to sender (they already know about their own update)
+      if (excludeClientId && client.clientId === excludeClientId) return;
       client.send(message);
     }
   });
@@ -45,7 +47,7 @@ root.post('/text', async (req, res) => {
 
     const saved = result.rows[0];
     res.status(200).json({ id: saved.id, text: saved.text });
-    broadcastTextUpdate({ id: saved.id, text: saved.text }, saved.id);
+    // Don't broadcast here - use WebSocket for real-time updates
   } catch (err) {
     console.error('Error saving text:', err.message);
     res.status(500).json({ error: 'Internal server error' });
@@ -89,12 +91,7 @@ root.put('/text/:id' , async (req,res) => {
     }
 
     const updated = result.rows[0];
-
-    broadcastTextUpdate({
-      id: updated.id,
-      text: updated.text
-    }, updated.id);
-
+    // Don't broadcast here - WebSocket messages already handle real-time syncing
     res.status(200).json(updated);
   } catch (error) {
     console.error('Error updating text:', error.message);
@@ -118,6 +115,9 @@ wss.on('connection', async (socket, request) => {
     return;
   }
 
+  // Assign unique ID to each client
+  socket.clientId = crypto.randomUUID();
+  
   if (latest.rows[0]) {
     socket.send(JSON.stringify({
       type: 'text-update',
@@ -127,7 +127,8 @@ wss.on('connection', async (socket, request) => {
   socket.roomId = roomId;
   socket.on('message', (raw) => {
     const message = JSON.parse(raw.toString());
-    broadcastTextUpdate({ text: message.text }, roomId);
+    // Broadcast to OTHER clients only (sender already has the update)
+    broadcastTextUpdate({ text: message.text }, roomId, socket.clientId);
   });
 });
 
