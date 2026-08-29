@@ -11,6 +11,8 @@ function Room() {
   const [text, setText] = useState("");
   const socketRef = useRef<WebSocket | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingTextRef = useRef<string>("");
   const [saveState, setSaveState] = useState('synced');
 
   useEffect(() => {
@@ -33,16 +35,25 @@ function Room() {
     return () => {
       socket.close();
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
     };
   }, [id]);
 
   const handleTextChange = (newText: string) => {
     setText(newText);
-    if (socketRef.current?.readyState === WebSocket.OPEN) {
-      socketRef.current.send(
-        JSON.stringify({ type: "text-update", text: newText }),
-      );
-    }
+    pendingTextRef.current = newText;
+
+    // Debounce WebSocket broadcast (300ms)
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(() => {
+      if (socketRef.current?.readyState === WebSocket.OPEN) {
+        socketRef.current.send(
+          JSON.stringify({ type: "text-update", text: pendingTextRef.current }),
+        );
+      }
+    }, 300);
+
+    // Debounce database save (1000ms)
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     setSaveState('saving');
     saveTimerRef.current = setTimeout(() => {
